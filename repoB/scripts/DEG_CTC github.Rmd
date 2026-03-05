@@ -1,0 +1,1426 @@
+---
+title: "DEG_CTC"
+author: "Sanga Mitra"
+output: html_document
+date: "2025-07-15"
+editor_options: 
+  chunk_output_type: console
+---
+
+## R Markdown
+
+```{r libraries}
+library(readxl)
+library(WriteXLS)
+library(writexl)
+library(openxlsx)
+library(reshape2)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(RColorBrewer)
+library(Matrix)
+library(edgeR)
+library(ggrepel)
+library(patchwork)
+library(VennDiagram)
+library(purrr)
+library(tidyr)
+library(pheatmap)
+library(ggpubr)
+library(forcats)
+library(cowplot)
+library(here)
+```
+
+```{r MSBB-full dataset load}
+
+# Define regions
+regions <- c("FP", "IFG", "PHG", "STG")
+
+# Create a function 
+load_region_data <- function(region) {
+  list(
+    Allgene = read.csv(here("data", "MSBB", paste0(region, "_all.csv"))),
+    DTANGLE = read.csv(here("data", "MSBB", paste0(region, "_dtangle.csv"))),
+    CIBER   = read.csv(here("data", "MSBB", paste0(region, "_Cibersort.csv")))
+  )
+}
+
+# Load one region (e.g., FP) based on requirement
+BR <- load_region_data("FP")
+
+# Extract data for the loaded region
+Allgene <- BR$Allgene
+DTANGLE <- BR$DTANGLE
+CIBER   <- BR$CIBER
+```
+
+```{r MSBB- common dataset load for Fig. S2}
+# Define regions
+regions <- c("FP134", "IFG134", "PHG134", "STG134")
+
+# Create function
+load_region_data <- function(region) {
+  list(
+    Allgene = read.csv(here("data", "MSBB", "common134", paste0(region, "_all.csv"))),
+    DTANGLE = read.csv(here("data", "MSBB", "common134", paste0(region, "_dtangle.csv")))
+  )
+}
+
+# Load one region
+BR <- load_region_data("FP134")
+
+# Extract objects
+Allgene <- BR$Allgene
+DTANGLE <- BR$DTANGLE
+```
+
+```{r MSBB metadata}
+# Read metadata - FP
+FP <- read.csv(here("data", "MSBB", "metadata", "metadata_PFC_FP.csv"))
+# select pathology column
+FP <- subset(FP, select = c(2, 43))
+
+# Read metadata - IFG
+IFG <- read.csv(here("data", "MSBB", "metadata", "metadata_inferior_frontal_gyrus.csv"))
+# select pathology column
+IFG <- subset(IFG, select = c(2, 43))
+
+# Read metadata - PHG
+PHG <- read.csv(here("data", "MSBB", "metadata", "metadata_parahippocampal_gyrus.csv"))
+# select pathology column
+PHG <- subset(PHG, select = c(2, 50))
+
+# Read metadata - STG
+STG <- read.csv(here("data", "MSBB", "metadata", "metadata_superior_temporal_gyrus.csv"))
+# select pathology column
+STG <- subset(STG, select = c(2, 43))
+
+```
+
+```{r Figure 2A & Fig. S2: representing cell type proportions}
+# Cell type proportion data (STG used as an example here)
+dtangleCTP <- read.csv(
+  here("data", "MSBB", "cell_estimates",
+       "bulkcounts_superior_temporal_gyrus_Dtangle_estimates_celltype_estimates.csv")
+)
+colnames(dtangleCTP)[1]<- "specimenID"
+
+# add pathology column from metadata (for the region chosen, in this case: STG)
+dtangleCTP <- inner_join(dtangleCTP, STG, by=c("specimenID"))
+
+# Reshape the data from wide to long format for ggplot2
+dtangleCTP_long <- melt(
+  dtangleCTP, 
+  id.vars = c("specimenID", "pathology"), 
+  variable.name = "CellType", 
+  value.name = "Proportion"
+)
+
+# box plot
+
+# Rename pathology levels and reorder them
+CTP_long <- dtangleCTP_long %>%
+  mutate(pathology = recode(pathology, "NoAD" = "CTL")) %>%
+  mutate(pathology = fct_relevel(pathology, "CTL", "AD"))  # Ensure CTL appears first
+
+# Compute mean and standard error for each group
+summary_data <- CTP_long %>%
+  group_by(CellType, pathology) %>%
+  summarise(
+    mean_value = mean(Proportion, na.rm = TRUE),
+    se_value = sd(Proportion, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+
+# Plot with correctly positioned error bars, renamed labels, and reordered categories
+boxplot <- ggplot(CTP_long, aes(x = CellType, y = Proportion, fill = pathology)) +     
+    geom_boxplot(width = 0.6, outlier.shape = NA, color = "black", position = position_dodge(0.6)) +  # Dodge for clear separation
+    geom_errorbar(data = summary_data, 
+                  aes(x = CellType, y = mean_value, ymin = mean_value - se_value, ymax = mean_value + se_value, group = pathology),
+                  width = 0.2, color = "black", position = position_dodge(0.6)) +  # Ensure error bars align with boxplots
+    geom_point(data = summary_data, aes(x = CellType, y = mean_value, group = pathology), 
+               color = "black", size = 2, shape = 21, fill = "white", position = position_dodge(0.6)) +  # Mean points
+    labs(x = "", y = "Proportions")  +       
+    scale_fill_manual(
+        values = c(
+            "CTL" = "blue1",  
+            "AD" = "chocolate2"
+        )
+    ) +       
+    theme_minimal() +  
+    theme(
+        panel.grid = element_blank(),  # Removes gridlines
+        axis.text.x = element_text(color = "black", face = "bold", size = 11),  
+        axis.text.y = element_text(color = "black", face = "bold", size = 12),  
+        axis.title = element_text(color = "black", face = "bold", size = 14),  
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1.5),
+        legend.text = element_text(color = "black", size= 12),
+        legend.title = element_text(color = "black", size= 12)
+    )
+
+# Display the plot
+print(boxplot)
+
+# save the plot 
+region <- "STG" # Change region for other regions
+
+ggsave(
+  filename = here("figures", paste0("dtangle_CTPboxplot_", region, ".pdf")),
+  plot = boxplot,
+  height = 4,
+  width = 6,
+  units = "in"
+)
+
+
+```
+
+```{r Figure 2A, Fig.S2 & Table S1: calcualte the significance in difference btw cell proportions of CTL and AD}
+# Rename file
+CTP <- dtangleCTP
+
+# Ensure pathology is a factor with correct reference order
+CTP$pathology <- factor(CTP$pathology, levels = c("NoAD", "AD"))
+
+# Function to calculate p-values and effect sizes for each cell type
+calculate_p_values <- function(data, cell_types, group_col) {
+
+  results <- lapply(cell_types, function(cell_type) {
+
+    # Define groups explicitly: Control (NoAD) as reference
+      group_ctl <- na.omit(data[[cell_type]][data[[group_col]] == "NoAD"])
+      group_ad  <- na.omit(data[[cell_type]][data[[group_col]] == "AD"])
+
+    # Two-sided Wilcoxon rank-sum test
+    test_result <- wilcox.test(
+      group_ctl,
+      group_ad,
+      alternative = "two.sided",
+      exact = FALSE
+    )
+
+    # Rank-biserial correlation (effect size)
+    n1 <- length(group_ctl)
+    n2 <- length(group_ad)
+    U  <- as.numeric(test_result$statistic)
+
+    # Effect size:
+    # Negative -> lower in AD
+    # Positive -> higher in AD
+    effect_size <- 1 - (2 * U) / (n1 * n2)
+
+    data.frame(
+      Cell_Type   = cell_type,
+      P_Value     = test_result$p.value,
+      Effect_Size = effect_size
+    )
+  })
+
+  # Combine per-cell-type results
+  results_df <- do.call(rbind, results)
+
+  # Adjust p-values using Benjamini–Hochberg correction
+  results_df$Adjusted_P <- p.adjust(results_df$P_Value, method = "BH")
+
+  # Function to assign significance levels (based on adjusted p-values)
+  get_significance <- function(p) {
+    if (p <= 0.001) {
+      "***"
+    } else if (p <= 0.01) {
+      "**"
+    } else if (p <= 0.05) {
+      "*"
+    } else {
+      "ns"
+    }
+  }
+
+  # Apply significance function
+  results_df$Significance <- sapply(results_df$Adjusted_P, get_significance)
+
+  return(results_df)
+}
+
+# Define cell type columns
+cell_types <- c("Neurons", "Astrocytes", "Oligodendrocytes", "Microglia")
+
+# Calculate p-values and effect sizes
+p_values_result <- calculate_p_values(CTP, cell_types, "pathology")
+
+# Print results
+print(p_values_result)
+
+```
+
+```{r Fig. S1A: compare cell type proportions- dtangle vs CIBERSORT}
+# STG shown here. Replace brain region as required
+# dtangle cell estimates
+dtangleCTP <- read.csv(
+  here("data", "MSBB", "cell_estimates",
+       "bulkcounts_superior_temporal_gyrus_Dtangle_estimates_celltype_estimates.csv")
+)
+colnames(dtangleCTP)[1]<- "specimenID"
+
+# CIBERSORT cell estimates
+CiberCTP <- read.csv(
+  here("data", "MSBB", "cell_estimates",
+       "bulkcounts_superior_temporal_gyrusCIBERSORT_estimates_celltype_estimates.csv")
+)
+colnames(CiberCTP)[1]<- "specimenID"
+
+# add pathology column from metadata
+dtangleCTP <- inner_join(dtangleCTP, STG, by=c("specimenID"))
+CiberCTP <- inner_join(CiberCTP, STG, by=c("specimenID"))
+
+# Melt the data into long format
+dtangle_long <- melt(dtangleCTP, variable.name = "CellType", value.name = "Proportion")
+dtangle_long$Dataset <- "dtangle"
+Ciber_long <- melt(CiberCTP, variable.name = "CellType", value.name = "Proportion")
+Ciber_long$Dataset <- "CIBERSORT"
+
+# Combine the two datasets
+# CIBER and Dtangle
+
+merged_data <- merge(Ciber_long, dtangle_long, 
+                     by = c("specimenID", "pathology","CellType"), 
+                     suffixes = c("_Ciber", "_dtangle"))
+
+# Rename pathology level
+merged_data$pathology <- recode(merged_data$pathology,
+                                "NoAD" = "CTL")
+
+# Calculate correlation for each cell type
+correlations <- merged_data %>%
+  group_by(CellType,pathology) %>%
+  do({
+    cor_value <- cor(.$Proportion_dtangle, .$Proportion_Ciber, use = "complete.obs")
+    data.frame(correlation = round(cor_value, 2))
+  }) %>%
+  ungroup()
+
+# Print correlation for each cell type
+print(correlations)
+
+
+# Ensure correct order: CTL first, then AD
+merged_data$pathology <- factor(merged_data$pathology,
+                                levels = c("CTL", "AD"))
+
+correlations$pathology <- factor(correlations$pathology,
+                                 levels = c("CTL", "AD"))
+
+# Plot scatter plots for each cell type with customization
+scp <- ggplot(merged_data,
+              aes(x = Proportion_Ciber,
+                  y = Proportion_dtangle,
+                  color = CellType)) +
+    
+    geom_point(size = 2, alpha = 0.7) +
+    
+    # Correlation labels (color-coded)
+    geom_text(data = correlations,
+              aes(x = 0.05,
+                  y = 0.98 - as.numeric(factor(CellType)) * 0.07,
+                  label = paste0("r = ", round(correlation, 2)),
+                  color = CellType),
+              inherit.aes = FALSE,
+              hjust = 0,
+              vjust = 1,
+              show.legend = FALSE) +
+    
+    labs(x = "CIBERSORT Proportions",
+         y = "dtangle Proportions",
+         color = "Cell Type") +
+    
+    coord_cartesian(xlim = c(0, 1),
+                    ylim = c(0, 1)) +
+    
+    scale_color_manual(values = c(
+       "Neurons" = "Blue",
+  "Astrocytes" = "Orange",
+  "Oligodendrocytes" = "Purple"
+    )) +
+    
+    theme_minimal() +
+    theme(
+        panel.grid = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA),
+        strip.background = element_blank(),
+        strip.text = element_text(size = 12, face = "bold"),
+        axis.text.x = element_text(color = "black", size = 10, angle = 45),
+        axis.text.y = element_text(color = "black", size = 10),
+        axis.title = element_text(color = "black", face = "bold", size = 14),
+        legend.position = "right"
+    ) +
+    
+    # Stack vertically
+    facet_wrap(~ pathology)
+
+print(scp)
+
+# save the plot
+region <- "STG" # Change region for other regions
+
+ggsave(
+  filename = here("figures", paste0(region, "_dtanglevsCiber_CTP.pdf")),
+  plot = scp,
+  height = 4,
+  width = 6,
+  units = "in"
+)
+
+```
+
+```{r Figure 2B & Fig. S3: Overlap with individual brain marker genes}
+# Load the Marker files
+Neuron <- read.csv(here("data", "markers", "Neurons.csv"))
+Astro  <- read.csv(here("data", "markers", "Astrocytes.csv"))
+Micro  <- read.csv(here("data", "markers", "Microglia.csv"))
+Oligo  <- read.csv(here("data", "markers", "Oligodendrocytes.csv"))
+
+# Load gene id file
+Allids <- read.csv(here("data", "markers", "merged_gene_mapping.csv"))
+
+# Matched for gene symbols
+Markernew <- left_join(Oligo, Allids, by=c("ensembl_id"))
+
+colnames(Markernew)[3] <- "HGNC_symbol"
+
+# Overlap with DEGs (load from MSBB folder)
+noCTC <- inner_join(Allgene, Markernew, by=c("HGNC_symbol"))
+noCTC <- subset(noCTC , select = c(7,1,5))
+
+dtangle <- inner_join(DTANGLE, Markernew, by=c("HGNC_symbol"))
+dtangle <- subset(dtangle , select = c(7,1,5))
+
+compare <-inner_join(noCTC, dtangle, by=c("HGNC_symbol"))
+
+colnames(compare) <- c("HGNC_symbol","noCTC_LogFC", "noCTC_adjpval","CTCDT_LogFC","CTCDT_adjpval" )
+
+# adpval
+compare <- subset(compare , select = c(1,3,5))
+colnames(compare) <- c("HGNC_symbol","noCTC","CTCDT")
+
+# Convert data to long format
+data_long <- melt(compare, id.vars = "HGNC_symbol")
+
+# Perform hierarchical clustering on rows
+row_dendrogram <- hclust(dist(compare[, -1]))  # Compute hierarchical clustering
+row_order <- row_dendrogram$order  # Get the order of genes after clustering
+
+# Reorder the Gene factor based on clustering
+data_long$HGNC_symbol <- factor(data_long$HGNC_symbol, levels = compare$HGNC_symbol[row_order])
+
+# Create heatmap with row clustering- adjpvalue
+data_long <- data_long %>%
+    mutate(fill_color = ifelse(value <= 0.05, "darkorange1", "cornsilk2"))
+
+p1 <- ggplot(data_long, aes(x = variable, y = HGNC_symbol, fill = fill_color)) +
+    geom_tile() +
+    scale_fill_identity() +  # Step 3: use exact colors as defined
+    theme_minimal() +
+    theme(axis.text.y = element_text(size = 1)) +  # Keep gene names visible
+    labs(x = "", y = "Genes") +
+    theme(
+        plot.title = element_blank(),
+        axis.text = element_text(color = "black", size = 12),
+        panel.border = element_rect(color = "black", fill = NA, size = 1)
+    ) +
+    coord_cartesian(expand = FALSE) +
+    scale_x_discrete(labels = c("noCTC" = "noCTC", "CTCDT" = expression("CTC"^"DT"))) +
+    geom_vline(xintercept = 1.5, color = "gray", linewidth = 0.3) +
+    geom_vline(xintercept = 1.5, color = "black", linewidth = 0.2)
+
+print(p1)
+
+# save the plot
+region <- "STG" # Change region for other regions
+
+ggsave(
+  filename = here("figures", paste0(region, "_compareOligoMarkersFDR.pdf")),
+  plot = p1,
+  height = 2,
+  width = 2,
+  units = "in"
+)
+
+# LogFC
+compare <-inner_join(noCTC, dtangle, by=c("HGNC_symbol"))
+
+colnames(compare) <- c("HGNC_symbol","noCTC_LogFC", "noCTC_adjpval","CTCDT_LogFC","CTCDT_adjpval" )
+
+compare <- subset(compare , select = c(1,2,4))
+colnames(compare) <- c("HGNC_symbol","noCTC","CTCDT")
+
+# Convert data to long format
+data_long <- melt(compare, id.vars = "HGNC_symbol")
+
+# Use the same row order
+# Reorder the Gene factor based on clustering
+data_long$HGNC_symbol <- factor(data_long$HGNC_symbol, levels = compare$HGNC_symbol[row_order])
+
+# Create heatmap with row clustering- LogFC
+
+p2 <- ggplot(data_long, aes(x = variable, y = HGNC_symbol, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 1)) +  # Keep gene names visible
+  labs(x = "", y = "Genes") + theme(
+    plot.title = element_blank(),
+    axis.text = element_text(color = "black", size = 12),
+    panel.border = element_rect(color = "black", fill = NA, size = 1) ) +
+  coord_cartesian(expand = FALSE) +
+  scale_x_discrete(labels = c("noCTC" = "noCTC", "CTCDT" = expression("CTC"^"DT"))) +
+  geom_vline(xintercept = 1.5, color = "gray", linewidth = 0.3)  
+
+print(p2)
+
+# save the plot
+region <- "STG" # Change region for other regions
+
+ggsave(
+  filename = here("figures", paste0(region, "_compareOligoMarkersLogFC.pdf")),
+  plot = p2,
+  height = 2,
+  width = 2,
+  units = "in"
+)
+```
+
+```{r Table 2: Find significant genes}
+
+# Load region specific data from MSBB folder
+
+bulknoctc <- subset(Allgene, Allgene$adj_pval<=0.05)
+dtangle <- subset(DTANGLE, DTANGLE$adj_pval<=0.05)
+
+noCTC_dtangle <- inner_join(bulknoctc, dtangle, by= c("HGNC_symbol"))
+ciber_dtangle <- inner_join(ciber, dtangle, by= c("HGNC_symbol"))
+
+# saving is optional
+write_xlsx(bulknoctc,
+           here("results", "noCTC.xlsx"))
+
+write_xlsx(dtangle,
+           here("results", "CTC.xlsx"))
+
+```
+
+```{r Table S3: noCTCexcl vs CTCDTexcl stringent cutoff}
+Allgene <- subset(Allgene , select = c(7,1,4,5))
+DTANGLE <- subset(DTANGLE , select = c(7,1,4,5))
+
+Joined <- inner_join(Allgene, DTANGLE, by=c("HGNC_symbol"))
+colnames(Joined) <- c("HGNC_symbol","LogFC_noCTC","pval_noCTC","adjp_noCTC","LogFC_CTC","pval_CTC","adjp_CTC")
+
+noCTCexcl <- subset(Joined, Joined$adjp_noCTC<=0.05 & Joined$pval_CTC>0.1)
+CTCDTexcl <- subset(Joined, Joined$adjp_CTC<=0.05 & Joined$pval_noCTC>0.1)
+
+write_xlsx(noCTCexcl,"/Users/sanga/Desktop/IIT Madras/DEG_CTC/MSBB/MSBB_newcovariates/noCTCexcl.xlsx")
+write_xlsx(CTCDTexcl,"/Users/sanga/Desktop/IIT Madras/DEG_CTC/MSBB/MSBB_newcovariates/CTCDTexcl.xlsx")
+```
+
+```{r Figure 3A & Fig. S1B: scatter plot for method comparison using all genes}
+# Filter all genes and corresponding logFC from 3 files (load data from MSBB folder)
+Bulk <- dplyr::select(Allgene, HGNC_symbol, logFC)
+Ciber <-dplyr::select(DTANGLE, HGNC_symbol, logFC)
+Dtangle <- dplyr::select(CIBER, HGNC_symbol, logFC)
+
+# Merge the data frames by gene_name for all genes
+merged_data <- Reduce(function(x, y) merge(x, y, by = "HGNC_symbol"), 
+                      list(Ciber, Dtangle,Bulk))
+
+# Rename columns for clarity for allgene data
+colnames(merged_data) <- c("gene_name", "LogFC_Ciber", "LogFC_dtangle", "LogFC_noCTC")
+
+
+# Step 3: Create scatter plots to compare ranks between datasets
+
+# Bulk vs. CIBERSORT
+plot1 <- ggplot(merged_data, aes(x = LogFC_noCTC, y = LogFC_Ciber)) +
+  geom_point(alpha = 0.7, color = "blue") +
+  labs(title = expression("noCTC vs CTC"^"CS"),
+    x = "LogFC in noCTC",
+    y = expression("LogFC in CTC"^"CS")) +
+  theme_minimal() +  
+    theme(
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1.5),
+        axis.text.x = element_text(color = "black", size = 12, angle = 0),
+        axis.text.y = element_text(color = "black", size = 12),
+        axis.title = element_text(color = "black",  size = 14)
+    )
+
+print(plot1)
+
+# Bulk vs. DTANGLE
+plot2 <- ggplot(merged_data, aes(x = LogFC_noCTC, y = LogFC_dtangle)) +
+  geom_point(alpha = 0.7, color = "green") +
+  labs(x = "LogFC in noCTC",
+       y = expression("LogFC in CTC"^"DT")) +
+  theme_minimal() +  
+    theme(
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1.5),
+        axis.text.x = element_text(color = "black", size = 12),
+        axis.text.y = element_text(color = "black", size = 12),
+        axis.title = element_text(color = "black",  size = 14)
+    )
+
+print(plot2)
+
+# CIBERSORT vs. DTANGLE
+plot3 <- ggplot(merged_data, aes(x = LogFC_Ciber, y = LogFC_dtangle)) +
+  geom_point(alpha = 0.7, color = "red") +
+  labs( x = expression("LogFC in CTC"^"CS"),
+        y = expression("LogFC in CTC"^"DT")) +
+  theme_minimal() +  
+    theme(
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1.5),
+        axis.text.x = element_text(color = "black", size = 12),
+        axis.text.y = element_text(color = "black", size = 12),
+        axis.title = element_text(color = "black",  size = 14)
+    )
+
+print(plot3)
+
+# save the plot
+region <- "STG" # Change region for other regions
+
+plots <- list(
+  noCTC_vs_CTCCS = plot1,
+  noCTC_vs_CTCDT = plot2,
+  CTCCS_vs_CTCDT = plot3
+)
+
+for (name in names(plots)) {
+  ggsave(
+    filename = here("figures", paste0(region, "_", name, ".pdf")),
+    plot = plots[[name]],
+    height = 5,
+    width = 6,
+    units = "in"
+  )
+}
+
+
+```
+
+```{r Fig. S1C: Bland-Altman Plot}
+# Filter all genes and corresponding LogFC  (load data from MSBB folder)
+Ciber <- dplyr::select(CIBER, HGNC_symbol, logFC)
+Dtangle <- dplyr::select(DTANGLE, HGNC_symbol, logFC)
+
+# Merge the data frames by gene_name for all genes
+merged_data <- Reduce(function(x, y) merge(x, y, by = "HGNC_symbol"), list(Ciber, Dtangle))
+
+colnames(merged_data) <- c("gene_name", "LogFC_Ciber", "LogFC_dtangle")
+
+# Calculate Bland-Altman statistics
+bland_altman_data <- merged_data %>%
+  mutate(
+    mean_diff = (LogFC_Ciber + LogFC_dtangle) / 2, # Mean of methods
+    diff = LogFC_Ciber - LogFC_dtangle,            # Difference
+    sd_diff = sd(diff)                                       # Standard deviation of differences
+  )
+
+# Compute the mean difference (bias) and confidence interval
+mean_bias <- mean(bland_altman_data$diff)
+ci_bias <- t.test(bland_altman_data$diff)$conf.int  # Confidence interval
+
+# Bland-Altman Plot
+baplot <- ggplot(bland_altman_data, aes(x = mean_diff, y = diff)) +
+  geom_point(size = 2, alpha = 0.6) +  # Scatter plot points
+  geom_hline(yintercept = mean_bias, linetype = "solid", color = "red", linewidth = 1.2) +  # Mean bias line
+  geom_hline(yintercept = ci_bias[1], linetype = "dotted", color = "gray", linewidth = 1) +  # Lower CI
+  geom_hline(yintercept = ci_bias[2], linetype = "dotted", color = "gray", linewidth = 1) +  # Upper CI
+  geom_smooth(method = "loess", color = "blue", se = FALSE, linetype = "dashed") +  # Loess regression
+  labs( x = bquote("Mean"),
+        y = bquote("Difference")
+  ) +
+  theme_minimal() +
+  theme(axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),  # Remove gridlines
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1.5),
+    axis.text.x = element_text(color = "black", size = 12),
+    axis.text.y = element_text(color = "black", size = 12)
+  )
+
+# Print plot
+print(baplot)
+
+# save the plot
+
+region <- "STG" # Change region for other regions
+
+comparison <- "CTCCS_vs_CTCDT"
+
+ggsave(
+  filename = here("figures", paste0(region, "_BlandAltman_", comparison, ".pdf")),
+  plot = baplot,
+  height = 5,
+  width = 6,
+  units = "in"
+)
+
+```
+
+```{r Fig. S4: concordance scatter plot with bar plot for flip type Insert}
+# Extract column- gene name and LogFC value (load data from MSBB folder)
+Bulk <-  dplyr::select(Allgene, HGNC_symbol, logFC)
+Dtangle <- dplyr::select(DTANGLE, HGNC_symbol, logFC)
+
+# Merge the data frames by gene_name for all genes
+merged_data <- Reduce(function(x, y) merge(x, y, by = "HGNC_symbol"), 
+                      list(Dtangle,Bulk))
+
+# Rename columns for clarity for allgene data
+colnames(merged_data) <- c("gene_name", "LogFC_dtangle", "LogFC_noCTC")
+
+# Select LogFC columns
+cor_matrix <- cor(merged_data[, c("LogFC_dtangle", "LogFC_noCTC")],
+                  method = "pearson")
+
+# Classify flip types
+df <- merged_data %>%
+  mutate(flip_type = case_when(
+    LogFC_noCTC > 0 & LogFC_dtangle < 0 ~ "Up to Down",
+    LogFC_noCTC < 0 & LogFC_dtangle > 0 ~ "Down to Up",
+    TRUE ~ "Concordant"
+  ))
+
+# Count flipped types
+flip_counts <- df %>%
+  filter(flip_type != "Concordant") %>%
+  count(flip_type)
+
+# Main concordance plot
+p_main <- ggplot(df, aes(x = LogFC_noCTC, y = LogFC_dtangle, color = flip_type)) +
+    geom_point(alpha = 0.6, size = 2) +
+    scale_color_manual(values = c("Up to Down" = "red", "Down to Up" = "blue", "Concordant" = "lemonchiffon4")) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black") +
+    geom_abline(slope = -1, intercept = 0, linetype = "dotted", color = "black") +
+    labs(x = expression("LogFC in noCTC"),
+         y = expression("LogFC in CTC"^"DT"),
+         color = "Flip Type") +
+    theme_minimal() +
+    theme(
+        legend.position = "none",  # Adjust legend position inside plot
+        legend.key = element_rect(fill = NA),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1.5), 
+        legend.text = element_text(color = "black", size= 14),
+        legend.title = element_text(color = "black", size= 14)
+    )
+
+# Bar plot of flipped counts
+p_bar <- ggplot(flip_counts, aes(x = flip_type, y = n, fill = flip_type)) +
+    geom_bar(stat = "identity", width = 0.4) +
+    scale_fill_manual(values = c("Up to Down" = "red", "Down to Up" = "blue")) +
+    labs(x = NULL, y = NULL) +
+    theme_minimal(base_size = 8) +
+    theme(
+        legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.background = element_rect(color = "black", linewidth = 0.5), 
+        legend.text = element_text(color = "black", size= 10),
+        legend.title = element_text(color = "black", size= 10)
+    )
+
+# Combine with inset
+final_plot <- ggdraw() +
+    draw_plot(p_main) +
+    draw_plot(p_bar, x = 0.65, y = 0.2, width = 0.3, height = 0.3) 
+
+# Display
+print(final_plot)
+
+# save the plot
+region <- "STG" # Change region for other regions
+
+ggsave(
+  filename = here("figures", paste0(region, "_flipplot.pdf")),
+  plot = final_plot,
+  height = 5,
+  width = 6,
+  units = "in"
+)
+
+
+```
+
+```{r Figure 3B: Density Plot: Compare Distribution of LogFC}
+# Extract column- gene name and LogFC value (load data from MSBB folder)
+Bulk <-  dplyr::select(Allgene, HGNC_symbol, logFC)
+Dtangle <- dplyr::select(DTANGLE, HGNC_symbol, logFC)
+
+# Merge the data frames by gene_name for all genes
+merged_data <- Reduce(function(x, y) merge(x, y, by = "HGNC_symbol"), 
+                      list(Dtangle,Bulk))
+
+# Rename columns for clarity for allgene data
+colnames(merged_data) <- c("gene_name", "LogFC_dtangle", "LogFC_noCTC")
+
+# Reshape data for ggplot
+df_long <- reshape2::melt(merged_data,
+                          id.vars = "gene_name",
+                          measure.vars = c("LogFC_dtangle", "LogFC_noCTC"),
+                          variable.name = "Correction",
+                          value.name = "LogFC")
+
+# Density plot
+plotd <- ggplot(df_long, aes(x = LogFC, fill = Correction)) +
+    geom_density(alpha = 0.5) + coord_cartesian(xlim = range(df_long$LogFC)) +
+    labs(
+        x = "Log2 Fold Change",
+        y = "Density"
+    ) +
+    scale_fill_manual(
+        values = c("darkorange", "steelblue"),
+        labels = c( expression(CTC^DT),"noCTC"),
+        name = NULL  # Remove legend title
+    ) +
+    theme_minimal() +
+    theme(
+        legend.key = element_rect(fill = NA),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1.5),
+        axis.text.x = element_text(color = "black", size = 12, angle = 0),
+        axis.text.y = element_text(color = "black", size = 12),
+        axis.title = element_text(color = "black",  size = 14)
+    )
+
+print(plotd)
+
+# save the plot
+region <- "STG" # Change region for other regions
+
+ggsave(
+  filename = here("figures", paste0(region, "_densityplot.pdf")),
+  plot = plotd,
+  height = 5,
+  width = 6,
+  units = "in"
+)
+
+```
+
+```{r Fig. S5, S9: Venn Diagram- Overlap and significance}
+# noCTC vs CTCDT
+bulknoctc <- subset(Allgene, Allgene$adj_pval<=0.05)
+dtangle <- subset(DTANGLE, DTANGLE$adj_pval<=0.05)
+
+# Extract gene names from each tab
+genes_dtangle <- dtangle$HGNC_symbol
+genes_bulknoctc <- bulknoctc$HGNC_symbol
+
+
+# Combine all genes from the three lists and find unique entries
+all_genes <- unique(c( genes_dtangle, genes_bulknoctc))
+
+
+# Bulk and dtangle
+venn <- venn.diagram(
+    x = list(
+        CTCDT = genes_dtangle,
+        noCTC = genes_bulknoctc
+    ),
+    category.names = c(expression("CTC"^"DT"), "noCTC"),
+    filename = NULL,  # Save plot in memory instead of a file
+    fill = c("darkorange", "steelblue"),
+    alpha = 0.5,
+    cex = 2.5, cat.cex = 2.5,
+    fontface = "bold",
+    cat.fontface = "bold",
+    main = ""
+)
+
+# Save the Venn diagram
+region <- "FP" # Change region for other regions
+png(
+  here("figures", paste0(region, "_venn_noCTC_vs_CTCDT.png")),
+  width = 400,
+  height = 400
+)
+grid.draw(venn)
+dev.off()
+
+# Overlap and significance
+
+# Calculate the total number of unique genes
+total_genes_in_universe <- length(unique(Allgene$HGNC_symbol))
+
+# Function to calculate overlap significance
+calculate_hypergeo_pval <- function(list1, list2, universe_size) {
+  overlap <- length(intersect(list1, list2))  # Number of overlapping genes
+  size_list1 <- length(list1)  # Size of list1
+  size_list2 <- length(list2)  # Size of list2
+  
+  # Hypergeometric test
+  p_value <- phyper(overlap - 1, size_list1, universe_size - size_list1, size_list2, lower.tail = FALSE)
+  
+  return(list(overlap = overlap, p_value = p_value))
+}
+
+# Calculate overlaps and p-values for each pair
+result_dtangle_noCTC <- calculate_hypergeo_pval(genes_dtangle, genes_bulknoctc, total_genes_in_universe)
+
+# Print results
+cat("Total unique genes in the universe:", total_genes_in_universe, "\n")
+cat("Overlap and significance:\n")
+cat("dtangle vs noCTC: Overlap =", result_dtangle_noCTC$overlap, 
+    ", P-value =", result_dtangle_noCTC$p_value, "\n")
+
+
+```
+
+```{r Figure 4A: region-wise DEG consistency before and after deconvolution- Jaccard}
+# reassign names for each region  (load data from MSBB folder)
+BM10_pre <- Allgene
+BM10_post <- DTANGLE
+BM44_pre <- Allgene
+BM44_post <- DTANGLE
+BM36_pre <- Allgene
+BM36_post <- DTANGLE
+BM22_pre <- Allgene
+BM22_post <- DTANGLE
+
+# Define Function to Extract DEG Genes
+get_deg_genes <- function(deg_table, fdr_thresh = 0.05) {
+  deg_table <- deg_table[!is.na(deg_table$adj_pval), ]
+  deg_table$HGNC_symbol[deg_table$adj_pval < fdr_thresh]
+}
+
+# Create DEG Lists by Region
+deg_list_pre <- list(
+  FP = get_deg_genes(BM10_pre),
+  IFG = get_deg_genes(BM44_pre),
+  PHG = get_deg_genes(BM36_pre),
+  STG = get_deg_genes(BM22_pre)
+)
+
+deg_list_post <- list(
+  FP = get_deg_genes(BM10_post),
+  IFG = get_deg_genes(BM44_post),
+  PHG = get_deg_genes(BM36_post),
+  STG = get_deg_genes(BM22_post)
+)
+
+# Compute Jaccard & Overlap Coefficient
+
+compute_overlap_metrics <- function(deg_list) {
+  regions <- names(deg_list)
+  n <- length(regions)
+  jaccard <- overlap <- matrix(NA, nrow = n, ncol = n,
+                               dimnames = list(regions, regions))
+  
+  for (i in seq_along(regions)) {
+    for (j in seq_along(regions)) {
+      g1 <- deg_list[[i]]
+      g2 <- deg_list[[j]]
+      inter <- length(intersect(g1, g2))
+      union <- length(union(g1, g2))
+      min_set <- min(length(g1), length(g2))
+      
+      jaccard[i, j] <- inter / union
+      overlap[i, j] <- inter / min_set
+    }
+  }
+  list(Jaccard = jaccard, Overlap = overlap)
+}
+
+metrics_pre <- compute_overlap_metrics(deg_list_pre)
+metrics_post <- compute_overlap_metrics(deg_list_post)
+
+
+# Plot JSI heatmaps
+
+# Split heatmap
+# Combine pre and post Jaccard matrices into one
+combined_jaccard <- matrix(NA, nrow = 4, ncol = 4)
+rownames(combined_jaccard) <- colnames(combined_jaccard) <- names(deg_list_pre)
+
+for (i in 1:4) {
+    for (j in 1:4) {
+        if (i > j) {
+            combined_jaccard[i, j] <- metrics_pre$Jaccard[i, j]  # Lower triangle: pre-correction
+        } else if (i < j) {
+            combined_jaccard[i, j] <- metrics_post$Jaccard[i, j] # Upper triangle: post-correction
+        } else {
+            combined_jaccard[i, j] <- 1  # Optionally leave diagonal blank
+        }
+    }
+}
+
+# Custom color gradient
+split_colors <- colorRampPalette(c("white", "lightgreen", "forestgreen"))(100)
+
+# Plot the split matrix and save it
+pdf(
+  here("figures", "Split_Jaccard_Heatmap_Pre_vs_Post.pdf"),
+  width = 5,
+  height = 4
+)
+
+pheatmap(
+    combined_jaccard,
+    main = "Split Jaccard Index\nLower: Pre-Correction | Upper: Post-Correction",
+    cluster_rows = FALSE,
+    cluster_cols = FALSE,
+    color = split_colors,
+    legend = TRUE,
+    display_numbers = TRUE,
+    fontsize_number = 12,
+    number_color = "black",
+    angle_col = 0
+)
+dev.off()
+
+
+```
+
+```{r Figure 4B: Heatmap for GSEA result}
+# Load processed GSEA results generated from WebGestalt
+data <- read.csv(
+  here("data", "MSBB", "GSEA","merged_GSEAfull_results.csv"))
+
+# Count number of GO and Reactome Functions
+
+data %>%
+  group_by(Function) %>%
+  summarise(unique_geneSet_count = n_distinct(geneSet))
+
+# Define color palette
+color_palette <- colorRampPalette(rev(brewer.pal(n = 9, name = "RdBu")))(100)
+
+# Generate separate heatmaps per Function for geneSet having atleast one FDR <=0.05
+
+for (func in unique(data$Function)) {
+    print(paste("Processing Function:", func))  # Debugging
+    
+    # Filter for current Function
+    sub_data <- data %>% filter(Function == func)
+    
+    # Remove geneSets where all FDR values are > 0.05
+    significant_geneSets <- sub_data %>%
+        group_by(geneSet) %>%
+        filter(any(FDR <= 0.05)) %>%  # Keep only if at least one entry has FDR <= 0.05
+        ungroup()
+    
+    # Proceed only if there are geneSets left
+    if (nrow(significant_geneSets) > 0) {
+        print(paste("Total geneSets retained for", func, ":",      n_distinct(significant_geneSets$geneSet)))
+        
+        # Prepare data for heatmap
+        heatmap_data <- significant_geneSets %>%
+            dplyr::select(geneSet, Datatype, NES) %>%
+            spread(key = Datatype, value = NES)
+        
+        row.names(heatmap_data) <- heatmap_data$geneSet
+        sub_matrix <- as.matrix(heatmap_data[, -1])  # Remove geneSet column
+        
+        # Handle NA values (replace with 0)
+        sub_matrix[is.na(sub_matrix)] <- 0
+        
+        # Convert all values to numeric
+        sub_matrix <- apply(sub_matrix, 2, as.numeric)
+        
+        outfile <- here(
+      "figures",
+      paste0("Heatmap_",
+             gsub("[^A-Za-z0-9]", "_", func),
+             ".pdf")
+    )
+        print(paste("Saving to:", outfile))
+        
+        pdf(file = outfile, width = 6, height = 5)
+        
+        pheatmap(
+            sub_matrix,
+            cluster_rows = TRUE,
+            cluster_cols = TRUE,
+            scale = "row",
+            color = color_palette,
+            main = paste("Heatmap for Function:", func),
+            fontsize_row = 8,
+            fontsize_col = 10
+        )
+        
+        dev.off()
+        
+        print("Device closed")
+    } else {
+        print(paste("Skipping Function:", func, "since no geneSet meets FDR <= 0.05 criteria"))
+    }
+}
+
+```
+
+```{r Table S6: AD risk loci from Open Targets}
+# File paths
+input_file  <- here("data", "GWAS_OpenTargets", "OpenTarget_AD.tsv")
+output_file <- here("data", "GWAS_OpenTargets", "AD_GWAS_genes_OpenTargets.tsv")
+
+# Read Open Targets file for AD
+ot <- read.delim(input_file, sep = "\t", stringsAsFactors = FALSE)
+
+# Convert 'No data' to NA and coerce to numeric
+ot <- ot %>%
+  mutate(
+    gwasCredibleSets = as.numeric(
+      ifelse(gwasCredibleSets == "No data", NA, gwasCredibleSets)
+    )
+  )
+
+# Sanity check (optional)
+summary(ot$gwasCredibleSets)
+
+# Extract AD GWAS risk genes 
+ad_gwas_genes <- ot %>%
+  filter(!is.na(gwasCredibleSets), gwasCredibleSets >= 0.2) %>%
+  select(symbol, gwasCredibleSets) %>%
+  arrange(desc(gwasCredibleSets)) %>%
+  distinct()
+
+# Inspect top genes
+head(ad_gwas_genes, 10)
+
+# Write output
+write.table(
+  ad_gwas_genes,
+  file = output_file,
+  sep = "\t",
+  row.names = FALSE,
+  quote = FALSE
+)
+
+# Processed AD risk file (converted .tsv file into .xlsx file)
+# Already processed in previous step. So no need to process every time.
+# The processed file already stored in folder. So can be used directly.
+
+ADrisk <- read_xlsx(
+  here("data", "GWAS_OpenTargets", "AD_GWAS_genes_OpenTargets.xlsx"),
+  sheet = 1
+)
+
+# Merge Function
+merge_ADrisk_DE <- function(ADrisk, DEdf, prefix) {
+  DEdf %>%
+    select(HGNC_symbol, logFC, PValue) %>%   # keep only relevant columns
+    inner_join(ADrisk %>% select(HGNC_symbol), by = "HGNC_symbol") %>%  # merge by gene symbol
+    rename(
+      !!paste0(prefix, "_logFC") := logFC,
+      !!paste0(prefix, "_PValue") := PValue
+    )
+}
+
+# Merge ADrisk with DE datasets (load individual DEG file from MSBB)
+
+ADrisk_pval_FPnoCTC <- merge_ADrisk_DE(ADrisk, Allgene, "FPnoCTC")
+ADrisk_pval_FPCTC   <- merge_ADrisk_DE(ADrisk, DTANGLE, "FPCTC")
+
+ADrisk_pval_IFGnoCTC <- merge_ADrisk_DE(ADrisk, Allgene, "IFGnoCTC")
+ADrisk_pval_IFGCTC   <- merge_ADrisk_DE(ADrisk, DTANGLE, "IFGCTC")
+
+ADrisk_pval_PHGnoCTC <- merge_ADrisk_DE(ADrisk, Allgene, "PHGnoCTC")
+ADrisk_pval_PHGCTC   <- merge_ADrisk_DE(ADrisk, DTANGLE, "PHGCTC")
+
+ADrisk_pval_STGnoCTC <- merge_ADrisk_DE(ADrisk, Allgene, "STGnoCTC")
+ADrisk_pval_STGCTC   <- merge_ADrisk_DE(ADrisk, DTANGLE, "STGCTC")
+
+# function: calculate adjusted p-values (FDR)
+
+adjust_pval <- function(df, pcol, new_col) {
+  df %>% mutate(!!new_col := p.adjust(.data[[pcol]], method = "BH"))
+}
+
+# Calculate adjusted p-values
+
+regions <- c("FP", "IFG", "PHG", "STG")
+conditions <- c("noCTC", "CTC")
+
+for (r in regions) {
+  for (cond in conditions) {
+    
+    obj_name <- paste0("ADrisk_pval_", r, cond)
+    
+    if (exists(obj_name)) {
+      
+      assign(
+        obj_name,
+        adjust_pval(
+          get(obj_name),
+          paste0(r, cond, "_PValue"),
+          paste0(r, cond, "_adjP")
+        )
+      )
+    }
+  }
+}
+
+# Filter significant genes (adjP <= 0.05) for each dataset
+
+for (r in regions) {
+  for (cond in conditions) {
+    
+    source_obj <- paste0("ADrisk_pval_", r, cond)
+    target_obj <- paste0("sig_genes_", r, cond)
+    adj_col    <- paste0(r, cond, "_adjP")
+    
+    if (exists(source_obj)) {
+      
+      assign(
+        target_obj,
+        get(source_obj) %>%
+          dplyr::filter(.data[[adj_col]] <= 0.05)
+      )
+    }
+  }
+}
+
+
+# Create summary table for significant AD risk gene count
+
+sig_counts <- expand.grid(
+  Region = regions,
+  Condition = conditions,
+  stringsAsFactors = FALSE
+) %>%
+  rowwise() %>%
+  mutate(
+    Dataset = paste0(Region, Condition),
+    Num_Significant = {
+      obj_name <- paste0("sig_genes_", Region, Condition)
+      if (exists(obj_name)) nrow(get(obj_name)) else NA
+    }
+  ) %>%
+  ungroup() %>%
+  select(Dataset, Num_Significant)
+
+
+# Print the summary
+print(sig_counts)
+
+# Find common significant genes
+common_sig_results <- list()
+
+for (r in regions) {
+  
+  obj_noCTC <- paste0("sig_genes_", r, "noCTC")
+  obj_CTC   <- paste0("sig_genes_", r, "CTC")
+  
+  if (exists(obj_noCTC) && exists(obj_CTC)) {
+    
+    common_sig_results[[r]] <- inner_join(
+      get(obj_noCTC),
+      get(obj_CTC),
+      by = "HGNC_symbol"
+    )
+    
+    cat("Region:", r,
+        "| Common genes:", nrow(common_sig_results[[r]]), "\n")
+  }
+}
+
+
+```
+
+```{r Figure 5A: ROSMAP vs MSBB}
+# Load data
+# MSBB
+FP_pre  <- read.csv(here("data","MSBB","FP_all.csv"))
+FP_post <- read.csv(here("data","MSBB","FP_dtangle.csv"))
+
+# Store everything in structured object
+
+deg_data <- list(
+  pre = list(
+    MSBB   = FP_pre,
+    ROSMAP = DLPFC_pre
+  ),
+  post = list(
+    MSBB   = FP_post,
+    ROSMAP = DLPFC_post
+  )
+)
+
+# Function to compute overlap, significant genes and Venn Input
+
+compute_overlap <- function(dataset_type) {
+  
+  MSBB   <- deg_data[[dataset_type]][["MSBB"]]
+  ROSMAP <- deg_data[[dataset_type]][["ROSMAP"]]
+  
+  # Keep only common genes
+  common <- inner_join(MSBB, ROSMAP, by = "HGNC_symbol")
+  
+  # Significant at FDR 5%
+  sig_MSBB   <- common %>% filter(adj_pval.x <= 0.05)
+  sig_ROSMAP <- common %>% filter(adj_pval.y <= 0.05)
+  
+  list(
+    common= common,
+    genes_MSBB   = sig_MSBB$HGNC_symbol,
+    genes_ROSMAP = sig_ROSMAP$HGNC_symbol
+  )
+}
+
+# Loop over both data sets to save both Venn simultaneously
+
+for (dataset_type in c("pre", "post")) {
+    
+    overlap_genes <- compute_overlap(dataset_type)
+    
+    venn_obj <- venn.diagram(
+        x = list(
+            ROSMAP = overlap_genes$genes_ROSMAP,
+            MSBB   = overlap_genes$genes_MSBB
+        ),
+        category.names = c("DLPFC", "FP"),
+        filename = NULL,
+        fill = c("steelblue", "lightpink"),
+        alpha = 0.5,
+        cex = 2,
+        cat.cex = 2,
+        cat.pos = c(-20, 20),
+        cat.dist = c(0.03, 0.03)
+    )
+    
+    # Save the plot
+    pdf(
+  file = here("figures",
+              paste0("ROSMAP_MSBB_", dataset_type, "_FDR5.pdf")),
+  width = 6,
+  height = 5
+)
+
+grid.draw(venn_obj)
+dev.off()
+
+}
+
+
+# overlap significance function
+compute_enrichment <- function(universe, subset1, subset2, overlap) {
+  # hypergeometric p-value (>= overlap)
+  p_hyper <- phyper(overlap - 1, subset1, universe - subset1, subset2, lower.tail = FALSE)
+  
+  # contingency table
+  a <- overlap
+  b <- subset1 - overlap
+  c <- subset2 - overlap
+  d <- universe - (a + b + c)
+  mat <- matrix(c(a, b, c, d), nrow = 2,
+                dimnames = list(subset1 = c("yes", "no"),
+                                subset2 = c("yes", "no")))
+  fisher_res <- fisher.test(mat, alternative = "greater")
+  
+  expected <- subset1 * subset2 / universe
+  fold_enrich <- overlap / expected
+  
+  list(
+    expected_overlap = expected,
+    fold_enrichment = fold_enrich,
+    odds_ratio = fisher_res$estimate,
+    p_value = fisher_res$p.value,
+    hyper_p_value = p_hyper
+  )
+}
+
+# calculate the significance for both dataset
+for (dataset_type in c("pre", "post")) {
+    
+    overlap_genes <- compute_overlap(dataset_type)
+    
+    # Universe = genes tested in both cohorts
+    universe <- nrow(overlap_genes$common)
+    
+    subset1 <- length(overlap_genes$genes_MSBB)
+    subset2 <- length(overlap_genes$genes_ROSMAP)
+    
+    overlap <- length(intersect(
+        overlap_genes$genes_MSBB,
+        overlap_genes$genes_ROSMAP
+    ))
+    
+    res <- compute_enrichment(universe, subset1, subset2, overlap)
+    
+    cat("\nDataset:", dataset_type, "\n")
+     
+    cat("Universe:", universe, "\n")
+    cat("Subset1:", subset1, "\n")
+    cat("Subset2:", subset2, "\n")
+    cat("Overlap:", overlap, "\n\n")
+    
+    print(res)
+}
+
+
+```
+
+```{r Figure 5B: ROSMAP vs MSBB severity score}
+# Load metadata
+meta <- read.csv(
+  here("data", "DLPFC_FP_combinedmetadata.csv"),
+  header = TRUE
+)
+
+# Select required columns
+meta <- subset(meta, select = c(8, 9, 5, 6))
+
+# Reshape to long format
+meta_long <- reshape2::melt(
+  meta,
+  variable.name = "severity",
+  value.name = "Score"
+)
+
+# Recode and reorder pathology
+meta_long <- meta_long %>%
+  mutate(pathology = recode(pathology, "NoAD" = "CTL")) %>%
+  mutate(pathology = forcats::fct_relevel(pathology, "CTL", "AD"))
+
+# Plot
+box_plot <- ggplot(meta_long,
+                   aes(x = pathology,
+                       y = Score,
+                       fill = Dataset)) +
+  geom_boxplot(width = 0.8) +
+  labs(x = "", y = "Severity") +
+  facet_wrap(~severity) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(color = "black", face = "bold", size = 12),
+    axis.text.y = element_text(color = "black", face = "bold", size = 12),
+    axis.title = element_text(color = "black", face = "bold", size = 14),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+    panel.grid = element_blank()
+  ) +
+  scale_fill_manual(values = c(
+    "FP" = "lightpink",
+    "DLPFC" = "steelblue"
+  ))
+
+print(box_plot)
+
+# Save plot (GitHub-friendly)
+ggsave(
+  filename = here("figures", "FPvsDLPFC_severity.pdf"),
+  plot = box_plot,
+  height = 5,
+  width = 6,
+  units = "in"
+)
+```
+
