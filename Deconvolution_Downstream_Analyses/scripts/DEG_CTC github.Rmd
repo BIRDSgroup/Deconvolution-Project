@@ -58,18 +58,18 @@ CIBER   <- BR$CIBER
 
 ```{r MSBB- common dataset load for Fig. S2}
 # Define regions
-regions <- c("FP134", "IFG134", "PHG134", "STG134")
+regions <- c("FP108", "IFG108", "PHG108", "STG108")
 
 # Create function
 load_region_data <- function(region) {
   list(
-    Allgene = read.csv(here("data", "MSBB", "common134", paste0(region, "_all.csv"))),
-    DTANGLE = read.csv(here("data", "MSBB", "common134", paste0(region, "_dtangle.csv")))
+    Allgene = read.csv(here("data", "MSBB", "common108", paste0(region, "_all.csv"))),
+    DTANGLE = read.csv(here("data", "MSBB", "common108", paste0(region, "_dtangle.csv")))
   )
 }
 
 # Load one region
-BR <- load_region_data("FP134")
+BR <- load_region_data("FP108")
 
 # Extract objects
 Allgene <- BR$Allgene
