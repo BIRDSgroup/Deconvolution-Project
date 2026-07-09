@@ -5,7 +5,9 @@ This repository contains two distinct codebases associated with the study "Syste
 This folder contains scripts for:
 
 -Deconvolution of bulk RNA-seq data
+
 -Differential gene expression analysis to generate cell type–corrected expression profile
+
 -Pseudobulk analysis of single-nucleus RNA-seq (snRNA-seq) data
 
 Developer: Maziya Ibrahim
