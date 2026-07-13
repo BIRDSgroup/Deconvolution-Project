@@ -7,6 +7,7 @@ Scripts for cell-type deconvolution of bulk RNA-seq data from the MSBB and ROSMA
 ```
 Deconvolution_Main_Code/
 ├── README.md
+├── data/
 ├── MSBBBulk_preprocessing.R
 ├── ROSMAPBulk_preprocessing.R
 ├── runDEGs.R
@@ -23,6 +24,12 @@ Deconvolution_Main_Code/
 ## Requirements
 
 The libraries required to run each script are mentioned within the scripts themselves.
+R Version 4.2.2
+RStudio 2022.07.1
+
+##Data
+
+A data/ folder contains some of the files used by the scripts in this repository. Other files can be downloaded from the synapse IDs mentioned in the manuscript. 
 
 ## Script Descriptions
 
