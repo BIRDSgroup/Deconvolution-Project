@@ -28,7 +28,7 @@ The various libraries required to run each script are mentioned within the scrip
 R Version 4.2.2
 RStudio 2022.07.1
 
-##Data
+## Data
 
 A data/ folder contains some of the files used by the scripts in this repository. Other files can be downloaded from the synapse IDs mentioned in the manuscript. 
 
