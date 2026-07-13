@@ -23,7 +23,8 @@ Deconvolution_Main_Code/
 
 ## Requirements
 
-The libraries required to run each script are mentioned within the scripts themselves.
+The various libraries required to run each script are mentioned within the scripts themselves.
+
 R Version 4.2.2
 RStudio 2022.07.1
 
