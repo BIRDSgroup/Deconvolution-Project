@@ -2,7 +2,7 @@ library(tidyr)
 library(tibble)
 
 #================================================================
-#For ROSMAP 27 samples get actual proportions of cell types----
+#For ROSMAP 24 samples get actual proportions of cell types----
 #================================================================
 
 celltype_samples = read.csv("celltype_num_cells_summary.csv",check.names = FALSE)
