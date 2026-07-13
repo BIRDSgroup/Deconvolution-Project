@@ -28,8 +28,8 @@ The libraries required to run each script are mentioned within the scripts thems
 
 ### Preprocessing
 
-- **`MSBBBulk_preprocessing.R`** — Preprocesses and classifies bulk RNA-seq samples obtained from the MSBB cohort on the Synapse portal.
-- **`ROSMAPBulk_preprocessing.R`** — Preprocesses and classifies bulk RNA-seq samples obtained from the ROSMAP cohort on the Synapse portal.
+- **`MSBBBulk_preprocessing.R`** — Preprocesses and classifies bulk RNA-seq samples as AD and CTL obtained from the MSBB cohort on the Synapse portal.
+- **`ROSMAPBulk_preprocessing.R`** — Preprocesses and classifies bulk RNA-seq samples as AD and CTL obtained from the ROSMAP cohort on the Synapse portal.
 
 ### Differential Expression
 
@@ -49,4 +49,4 @@ The following scripts process the snRNA-seq data from ROSMAP for the 24 samples 
 - **`generate_celltype_pseudobulk_countmatrix.R`** — Generates cell-type-level pseudobulk count matrices.
 - **`generate_simulatedbulk_countmatrix.R`** — Generates simulated bulk count matrices.
 - **`ROSMAP24_pseudobulk_countmatrix_metadata.R`** — Generates the pseudobulk count matrix and associated metadata for the 24 matched ROSMAP samples.
-- **`ROSMAP24_actual_celltype_proportions.R`** — Computes the actual (ground-truth) cell type proportions for the 24 matched ROSMAP samples.
+- **`ROSMAP24_actual_celltype_proportions.R`** — Actual cell type proportions for the 24 matched ROSMAP samples.
