@@ -2,8 +2,6 @@
 
 Scripts for cell-type deconvolution of bulk RNA-seq data from the MSBB and ROSMAP cohorts, including preprocessing, differential expression analysis, and pseudobulk generation from matched snRNA-seq data.
 
-## Repository Structure
-
 ```
 Deconvolution_Main_Code/
 ├── README.md
