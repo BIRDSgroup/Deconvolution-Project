@@ -1,0 +1,2 @@
+/home/maziya/Deconvolution-Project/Deconvolution_Main_Code/data/sce.qs filter=lfs diff=lfs merge=lfs -text
+*.qs filter=lfs diff=lfs merge=lfs -text
