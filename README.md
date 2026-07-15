@@ -17,9 +17,9 @@ This folder contains scripts for all downstream analyses performed on the differ
 
 The code enables users to:
 
--Reproduce the figures and tables presented in the manuscript
-
 -Perform the downstream statistical and biological analyses described in the study
+
+-Reproduce the figures and tables presented in the manuscript
 
 A detailed description of the analysis workflow, required inputs, and methods is provided within this folder.
 
